@@ -18,9 +18,25 @@ func main() {
 	if err := client.Schema.Create(context.Background()); err != nil {
 		log.Fatalf("failed creating schema resources: %v", err)
 	}
-	savedUser, err := tutorial.CreateUser(context.Background(), client)
+	//_, err = tutorial.CreateUser(context.Background(), client)
+	//if err != nil {
+	//	log.Panic(err)
+	//}
+	//findUser, err := tutorial.QueryUser(context.Background(), client)
+	//if err != nil {
+	//	log.Panic(err)
+	//}
+	//log.Println(findUser)
+	a8m, err := tutorial.CreateCars(context.Background(), client)
 	if err != nil {
-		log.Panic(err)
+		panic(err)
 	}
-	log.Println(savedUser)
+	err = tutorial.QueryCars(context.Background(), a8m)
+	if err != nil {
+		panic(err)
+	}
+	err = tutorial.QueryCarUsers(context.Background(), a8m)
+	if err != nil {
+		panic(err)
+	}
 }
