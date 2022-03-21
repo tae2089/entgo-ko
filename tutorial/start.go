@@ -71,6 +71,8 @@ func QueryUser(ctx context.Context, client *ent.Client) (*ent.User, error) {
 		return nil, fmt.Errorf("failed querying user: %w", err)
 	}
 	log.Println("user returned: ", u)
+	ue, err := client.User.Query().WithCars().All(ctx)
+	log.Println(ue[0].Edges.Cars)
 	return u, nil
 }
 
