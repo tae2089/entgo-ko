@@ -13,6 +13,8 @@ const (
 	FieldName = "name"
 	// EdgeCars holds the string denoting the cars edge name in mutations.
 	EdgeCars = "cars"
+	// EdgeGroups holds the string denoting the groups edge name in mutations.
+	EdgeGroups = "groups"
 	// Table holds the table name of the user in the database.
 	Table = "users"
 	// CarsTable is the table that holds the cars relation/edge.
@@ -22,6 +24,11 @@ const (
 	CarsInverseTable = "cars"
 	// CarsColumn is the table column denoting the cars relation/edge.
 	CarsColumn = "user_cars"
+	// GroupsTable is the table that holds the groups relation/edge. The primary key declared below.
+	GroupsTable = "group_users"
+	// GroupsInverseTable is the table name for the Group entity.
+	// It exists in this package in order to avoid circular dependency with the "group" package.
+	GroupsInverseTable = "groups"
 )
 
 // Columns holds all SQL columns for user fields.
@@ -30,6 +37,12 @@ var Columns = []string{
 	FieldAge,
 	FieldName,
 }
+
+var (
+	// GroupsPrimaryKey and GroupsColumn2 are the table columns denoting the
+	// primary key for the groups relation (M2M).
+	GroupsPrimaryKey = []string{"group_id", "user_id"}
+)
 
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {

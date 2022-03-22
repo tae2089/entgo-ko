@@ -4,6 +4,7 @@ import (
 	"context"
 	"entgo-ko/ent"
 	"entgo-ko/ent/car"
+	"entgo-ko/ent/group"
 	"entgo-ko/ent/user"
 	"fmt"
 	"log"
@@ -103,5 +104,97 @@ func QueryCarUsers(ctx context.Context, a8m *ent.User) error {
 		}
 		log.Printf("car %q owner: %q\n", ca.Model, owner.Name)
 	}
+	return nil
+}
+
+func CreateGraph(ctx context.Context, client *ent.Client) error {
+	// First, create the users.
+	a8m, err := client.User.
+		Create().
+		SetAge(30).
+		SetName("Ariel").
+		Save(ctx)
+	if err != nil {
+		return err
+	}
+	neta, err := client.User.
+		Create().
+		SetAge(28).
+		SetName("Neta").
+		Save(ctx)
+	if err != nil {
+		return err
+	}
+	// Then, create the cars, and attach them to the users in the creation.
+	err = client.Car.
+		Create().
+		SetModel("Tesla").
+		SetRegisteredAt(time.Now()). // ignore the time in the graph.
+		SetOwner(a8m).               // attach this graph to Ariel.
+		Exec(ctx)
+	if err != nil {
+		return err
+	}
+	err = client.Car.
+		Create().
+		SetModel("Mazda").
+		SetRegisteredAt(time.Now()). // ignore the time in the graph.
+		SetOwner(a8m).               // attach this graph to Ariel.
+		Exec(ctx)
+	if err != nil {
+		return err
+	}
+	err = client.Car.
+		Create().
+		SetModel("Ford").
+		SetRegisteredAt(time.Now()). // ignore the time in the graph.
+		SetOwner(neta).              // attach this graph to Neta.
+		Exec(ctx)
+	if err != nil {
+		return err
+	}
+	// Create the groups, and add their users in the creation.
+	err = client.Group.
+		Create().
+		SetName("GitLab").
+		AddUsers(neta, a8m).
+		Exec(ctx)
+	if err != nil {
+		return err
+	}
+	err = client.Group.
+		Create().
+		SetName("GitHub").
+		AddUsers(a8m).
+		Exec(ctx)
+	if err != nil {
+		return err
+	}
+	log.Println("The graph was created successfully")
+	return nil
+}
+func QueryGithub(ctx context.Context, client *ent.Client) (*ent.User, error) {
+	users, err := client.Group.
+		Query().
+		Where(group.Name("GitHub")). // (Group(Name=GitHub),)
+		QueryUsers().                // (User(Name=Ariel, Age=30),)
+		First(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed getting cars: %w", err)
+	}
+	// Output: (Car(Model=Tesla, RegisteredAt=<Time>), Car(Model=Mazda, RegisteredAt=<Time>),)
+	return users, nil
+}
+
+func QueryUserCars(ctx context.Context, a8m *ent.User) error {
+	// Get "Ariel" from previous steps.
+	cars, err := a8m. // Get the groups, that a8m is connected to:
+				QueryCars(). //
+				All(ctx)
+	if err != nil {
+		return fmt.Errorf("failed getting cars: %w", err)
+	}
+	log.Println("cars returned:", cars)
+	// Output: (Car(Model=Tesla, RegisteredAt=<Time>), Car(Model=Ford, RegisteredAt=<Time>),)
 	return nil
 }

@@ -443,3 +443,209 @@ func main() {
 	}
 }
 ````
+###  두번째 관계 생성해보기
+One To Many를 생성해보았으니 이번에는 Many To Many의 관계를 생성해보도록 하겠습니다. <br />
+유저가 다양한 그룹을 가질 수 있으며 그룹 또한 다양한 유저를 가질 수 있는 상황을 만들어보겠습니다.
+
+ent/schema에 있는 group.go 파일에 edge를 추가해주겠습니다.
+```go
+
+// Edges of the Group.
+func (Group) Edges() []ent.Edge {
+   return []ent.Edge{
+       edge.To("users", User.Type),
+   }
+}
+```
+User에도 edge를 추가해주겠습니다.
+```go
+
+// Edges of the User.
+func (User) Edges() []ent.Edge {
+   return []ent.Edge{
+       edge.To("cars", Car.Type),
+       // Create an inverse-edge called "groups" of type `Group`
+       // and reference it to the "users" edge (in Group schema)
+       // explicitly using the `Ref` method.
+       edge.From("groups", Group.Type).
+           Ref("users"),
+   }
+}
+```
+추가가 완료되었다면 re-generate 해주겠습니다.
+```shell
+go generate ./ent
+```
+### 그래프 탐사하기
+entgo의 특징인 graph Traversal을 해보도록하겠습니다. 저희가 탐사할 그림은 다음과 같습니다.
+![](../img/re_graph_getting_started.png)
+그래프 탐사를 하기에 앞서 데이터를 입력해주는 코드를 구현하겠습니다. start.go 파일에 다음 코드를 추가해주시기 바랍니다.
+```go
+
+func CreateGraph(ctx context.Context, client *ent.Client) error {
+    // First, create the users.
+    a8m, err := client.User.
+        Create().
+        SetAge(30).
+        SetName("Ariel").
+        Save(ctx)
+    if err != nil {
+        return err
+    }
+    neta, err := client.User.
+        Create().
+        SetAge(28).
+        SetName("Neta").
+        Save(ctx)
+    if err != nil {
+        return err
+    }
+    // Then, create the cars, and attach them to the users in the creation.
+    err = client.Car.
+        Create().
+        SetModel("Tesla").
+        SetRegisteredAt(time.Now()). // ignore the time in the graph.
+        SetOwner(a8m).               // attach this graph to Ariel.
+        Exec(ctx)
+    if err != nil {
+        return err
+    }
+    err = client.Car.
+        Create().
+        SetModel("Mazda").
+        SetRegisteredAt(time.Now()). // ignore the time in the graph.
+        SetOwner(a8m).               // attach this graph to Ariel.
+        Exec(ctx)
+    if err != nil {
+        return err
+    }
+    err = client.Car.
+        Create().
+        SetModel("Ford").
+        SetRegisteredAt(time.Now()). // ignore the time in the graph.
+        SetOwner(neta).              // attach this graph to Neta.
+        Exec(ctx)
+    if err != nil {
+        return err
+    }
+    // Create the groups, and add their users in the creation.
+    err = client.Group.
+        Create().
+        SetName("GitLab").
+        AddUsers(neta, a8m).
+        Exec(ctx)
+    if err != nil {
+        return err
+    }
+    err = client.Group.
+        Create().
+        SetName("GitHub").
+        AddUsers(a8m).
+        Exec(ctx)
+    if err != nil {
+        return err
+    }
+    log.Println("The graph was created successfully")
+    return nil
+}
+```
+그 다음 GitHub라는 그룹에 속한 유저를 찾는 코드를 작성해보겠습니다. 이것 또한 start.go에 추가해 줍니다.
+```go
+
+import (
+"log"
+
+"entgo-ko/ent"
+"entgo-ko/ent/group"
+)
+func QueryGithub(ctx context.Context, client *ent.Client) error {
+    cars, err := client.Group.
+        Query().
+        Where(group.Name("GitHub")). // (Group(Name=GitHub),)
+        QueryUsers().                // (User(Name=Ariel, Age=30),)
+        QueryCars().                 // (Car(Model=Tesla, RegisteredAt=<Time>), Car(Model=Mazda, RegisteredAt=<Time>),)
+        All(ctx)
+    if err != nil {
+        return fmt.Errorf("failed getting cars: %w", err)
+    }
+    log.Println("cars returned:", cars)
+    // Output: (Car(Model=Tesla, RegisteredAt=<Time>), Car(Model=Mazda, RegisteredAt=<Time>),)
+    return nil
+}
+```
+유저가 소유하고 있는 차의 리스트를 뽑는 코드를 작성해보겠습니다. 이것 또한 start.go에 추가해줍니다.
+```go
+
+import (
+"log"
+
+"entgo-ko/ent"
+"entgo-ko/ent/car"
+)
+func QueryArielCars(ctx context.Context, client *ent.Client) error {
+    // Get "Ariel" from previous steps.
+    a8m := client.User.
+        Query().
+        Where(
+            user.HasCars(),
+            user.Name("Ariel"),
+        ).
+        OnlyX(ctx)
+    cars, err := a8m.                       // Get the groups, that a8m is connected to:
+            QueryGroups().                  // (Group(Name=GitHub), Group(Name=GitLab),)
+            QueryUsers().                   // (User(Name=Ariel, Age=30), User(Name=Neta, Age=28),)
+            QueryCars().                    //
+            Where(                          //
+                car.Not(                    //  Get Neta and Ariel cars, but filter out
+                    car.Model("Mazda"),     //  those who named "Mazda"
+                ),                          //
+            ).                              //
+            All(ctx)
+    if err != nil {
+        return fmt.Errorf("failed getting cars: %w", err)
+    }
+    log.Println("cars returned:", cars)
+    // Output: (Car(Model=Tesla, RegisteredAt=<Time>), Car(Model=Ford, RegisteredAt=<Time>),)
+    return nil
+}
+```
+main.go에 코드를 입력해줍니다. 다음 코드는 전체 코드입니다
+```go
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"entgo-ko/ent"
+	"entgo-ko/tutorial"
+	_ "github.com/mattn/go-sqlite3"
+	"log"
+	"os"
+)
+
+func main() {
+	client, err := ent.Open("sqlite3", "file:ent?mode=memory&cache=shared&_fk=1")
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer client.Close()
+	if err := client.Schema.Create(context.Background()); err != nil {
+		log.Fatalf("failed creating schema resources: %v", err)
+	}
+
+	err = tutorial.CreateGraph(context.Background(), client)
+	if err != nil {
+		log.Fatalf("failed CreateGraph: %v", err)
+	}
+
+	user, err := tutorial.QueryGithub(context.Background(), client)
+	if err != nil {
+		log.Fatalf("failed QueryGithub: %v", err)
+	}
+	err = tutorial.QueryUserCars(context.Background(), user)
+	if err != nil {
+		log.Fatalf("failed QueryUserCars: %v", err)
+	}
+}
+```

@@ -6,9 +6,11 @@ import (
 	"context"
 	"encoding/json"
 	"entgo-ko/ent"
+	"entgo-ko/tutorial"
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	_ "github.com/mattn/go-sqlite3"
+	//_ "github.com/lib/pq"
 	"log"
 	"os"
 )
@@ -41,36 +43,23 @@ func main() {
 		log.Fatalf("failed opening connection to sqlite: %v", err)
 	}
 	defer client.Close()
-	// Run the auto migration tool.
 	if err := client.Schema.Create(context.Background()); err != nil {
 		log.Fatalf("failed creating schema resources: %v", err)
 	}
-	//_, err = tutorial.CreateUser(context.Background(), client)
-	//if err != nil {
-	//	log.Panic(err)
-	//}
-	//findUser, err := tutorial.QueryUser(context.Background(), client)
-	//if err != nil {
-	//	log.Panic(err)
-	//}
-	//log.Println(findUser)
-	//a8m, err := tutorial.CreateCars(context.Background(), client)
-	client.User.
-		Create().SetName("sd").
-		Save(context.Background())
-	//
-	//if err != nil {
-	//	panic(err)
-	//}
-	//_, err = tutorial.QueryUser(context.Background(), client)
-	//err = tutorial.QueryCars(context.Background(), a8m)
-	//if err != nil {
-	//	panic(err)
-	//}
-	//err = tutorial.QueryCarUsers(context.Background(), a8m)
-	//if err != nil {
-	//	panic(err)
-	//}
+
+	err = tutorial.CreateGraph(context.Background(), client)
+	if err != nil {
+		log.Fatalf("failed CreateGraph: %v", err)
+	}
+
+	user, err := tutorial.QueryGithub(context.Background(), client)
+	if err != nil {
+		log.Fatalf("failed QueryGithub: %v", err)
+	}
+	err = tutorial.QueryUserCars(context.Background(), user)
+	if err != nil {
+		log.Fatalf("failed QueryUserCars: %v", err)
+	}
 }
 
 func QueryTest(v ...interface{}) {
